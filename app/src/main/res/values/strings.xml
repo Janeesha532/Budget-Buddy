@@ -27,4 +27,5 @@
     <string name="expense">Expense</string>
     <string name="expenses_by_category">Expenses by Category</string>
     <string name="monthly_summary">Monthly Summary</string>
+    <string name="edit_transaction">Edit Transaction</string>
 </resources>

@@ -4,6 +4,7 @@ import androidx.lifecycle.LiveData
 import com.example.budgebuddy3.database.TransactionDao
 import com.example.budgebuddy3.model.Transaction
 import com.example.budgebuddy3.model.TransactionType
+import java.util.Calendar
 
 class TransactionRepository(private val transactionDao: TransactionDao) {
     val allTransactions: LiveData<List<Transaction>> = transactionDao.getAllTransactions()
@@ -12,6 +13,13 @@ class TransactionRepository(private val transactionDao: TransactionDao) {
 
     suspend fun getAllTransactionsSync(): List<Transaction> {
         return transactionDao.getAllTransactionsSync()
+    }
+
+    suspend fun getCurrentMonthTransactions(): List<Transaction> {
+        val calendar = Calendar.getInstance()
+        val currentMonth = calendar.get(Calendar.MONTH)
+        val currentYear = calendar.get(Calendar.YEAR)
+        return transactionDao.getTransactionsByMonthYear(currentMonth, currentYear)
     }
 
     suspend fun insert(transaction: Transaction) {

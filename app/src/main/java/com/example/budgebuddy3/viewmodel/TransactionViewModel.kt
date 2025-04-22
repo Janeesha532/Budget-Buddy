@@ -7,10 +7,15 @@ import androidx.lifecycle.viewModelScope
 import com.example.budgebuddy3.model.Transaction
 import com.example.budgebuddy3.model.TransactionType
 import com.example.budgebuddy3.repository.TransactionRepository
+import com.example.budgebuddy3.util.PreferencesHelper
 import kotlinx.coroutines.launch
+import java.util.Calendar
 import java.util.Date
 
-class TransactionViewModel(private val repository: TransactionRepository) : ViewModel() {
+class TransactionViewModel(
+    private val repository: TransactionRepository,
+    private val preferencesHelper: PreferencesHelper
+) : ViewModel() {
     val transactions: LiveData<List<Transaction>> = repository.allTransactions
     
     private val _totalIncome = MutableLiveData<Double>(0.0)
@@ -19,7 +24,7 @@ class TransactionViewModel(private val repository: TransactionRepository) : View
     private val _totalExpenses = MutableLiveData<Double>(0.0)
     val totalExpenses: LiveData<Double> = _totalExpenses
 
-    private val _monthlyBudget = MutableLiveData<Double>(0.0)
+    private val _monthlyBudget = MutableLiveData<Double>(preferencesHelper.monthlyBudget)
     val monthlyBudget: LiveData<Double> = _monthlyBudget
 
     private val _monthlyExpenses = MutableLiveData<Double>(0.0)
@@ -29,30 +34,36 @@ class TransactionViewModel(private val repository: TransactionRepository) : View
     val monthlyIncome: LiveData<Double> = _monthlyIncome
 
     init {
-        updateTotals()
-        updateMonthlyCalculations()
+        // Initialize values when ViewModel is created
+        viewModelScope.launch {
+            updateTotals()
+            updateMonthlyCalculations()
+        }
+
+        // Observe transactions for changes
+        transactions.observeForever { transactions ->
+            viewModelScope.launch {
+                updateTotals()
+                updateMonthlyCalculations()
+            }
+        }
     }
 
     fun setMonthlyBudget(amount: Double) {
         _monthlyBudget.value = amount
+        preferencesHelper.monthlyBudget = amount
     }
 
     fun insert(transaction: Transaction) = viewModelScope.launch {
         repository.insert(transaction)
-        updateTotals()
-        updateMonthlyCalculations()
     }
 
     fun update(transaction: Transaction) = viewModelScope.launch {
         repository.update(transaction)
-        updateTotals()
-        updateMonthlyCalculations()
     }
 
     fun delete(transaction: Transaction) = viewModelScope.launch {
         repository.delete(transaction)
-        updateTotals()
-        updateMonthlyCalculations()
     }
 
     private fun updateTotals() {
@@ -69,13 +80,25 @@ class TransactionViewModel(private val repository: TransactionRepository) : View
 
     private fun updateMonthlyCalculations() {
         viewModelScope.launch {
-            val allTransactions = transactions.value ?: emptyList()
-            
-            _monthlyExpenses.value = allTransactions
+            val allTransactions = repository.getAllTransactionsSync()
+            val calendar = Calendar.getInstance()
+            val currentMonth = calendar.get(Calendar.MONTH)
+            val currentYear = calendar.get(Calendar.YEAR)
+
+            // Filter transactions for current month
+            val currentMonthTransactions = allTransactions.filter { transaction ->
+                val transactionCalendar = Calendar.getInstance().apply {
+                    time = transaction.date
+                }
+                transactionCalendar.get(Calendar.MONTH) == currentMonth &&
+                transactionCalendar.get(Calendar.YEAR) == currentYear
+            }
+
+            _monthlyExpenses.value = currentMonthTransactions
                 .filter { it.type == TransactionType.EXPENSE }
                 .sumOf { it.amount }
 
-            _monthlyIncome.value = allTransactions
+            _monthlyIncome.value = currentMonthTransactions
                 .filter { it.type == TransactionType.INCOME }
                 .sumOf { it.amount }
         }

@@ -15,6 +15,7 @@ import com.example.budgebuddy3.databinding.FragmentAnalysisBinding
 import com.example.budgebuddy3.model.CategorySummary
 import com.example.budgebuddy3.model.Transaction
 import com.example.budgebuddy3.model.TransactionType
+import com.example.budgebuddy3.util.PreferencesHelper
 import com.example.budgebuddy3.viewmodel.TransactionViewModel
 import com.example.budgebuddy3.viewmodel.TransactionViewModelFactory
 import com.github.mikephil.charting.animation.Easing
@@ -53,8 +54,9 @@ class AnalysisFragment : Fragment() {
 
     private fun setupViewModel() {
         val repository = (requireActivity().application as BudgetApplication).repository
-        val factory = TransactionViewModelFactory(repository)
-        viewModel = ViewModelProvider(this, factory)[TransactionViewModel::class.java]
+        val preferencesHelper = PreferencesHelper(requireContext())
+        val factory = TransactionViewModelFactory(repository, preferencesHelper)
+        viewModel = ViewModelProvider(requireActivity(), factory)[TransactionViewModel::class.java]
     }
 
     private fun setupPieChart() {

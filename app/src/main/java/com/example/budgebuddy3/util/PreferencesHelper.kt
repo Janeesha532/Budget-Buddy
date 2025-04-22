@@ -12,11 +12,16 @@ class PreferencesHelper(context: Context) {
         private const val KEY_BUDGET_ALERT_THRESHOLD = "budget_alert_threshold"
         private const val KEY_DAILY_REMINDER = "daily_reminder"
         private const val KEY_DAILY_REMINDER_TIME = "daily_reminder_time"
+        private const val KEY_MONTHLY_BUDGET = "monthly_budget"
     }
 
     var currency: String
         get() = preferences.getString(KEY_CURRENCY, "USD") ?: "USD"
         set(value) = preferences.edit().putString(KEY_CURRENCY, value).apply()
+
+    var monthlyBudget: Double
+        get() = preferences.getFloat(KEY_MONTHLY_BUDGET, 0f).toDouble()
+        set(value) = preferences.edit().putFloat(KEY_MONTHLY_BUDGET, value.toFloat()).apply()
 
     var budgetAlertThreshold: Int
         get() = preferences.getInt(KEY_BUDGET_ALERT_THRESHOLD, 80)

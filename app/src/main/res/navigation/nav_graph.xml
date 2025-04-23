@@ -23,4 +23,10 @@
         android:label="Analysis"
         tools:layout="@layout/fragment_analysis" />
 
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.example.budgebuddy3.ui.settings.SettingsFragment"
+        android:label="Settings"
+        tools:layout="@layout/fragment_settings" />
+
 </navigation>

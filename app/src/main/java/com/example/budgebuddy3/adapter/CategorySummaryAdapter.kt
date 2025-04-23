@@ -1,5 +1,6 @@
 package com.example.budgebuddy3.adapter
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -9,12 +10,18 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.example.budgebuddy3.R
 import com.example.budgebuddy3.model.CategorySummary
-import java.text.NumberFormat
-import java.util.Locale
+import com.example.budgebuddy3.util.CurrencyHelper
+import com.example.budgebuddy3.util.PreferencesHelper
 
-class CategorySummaryAdapter : ListAdapter<CategorySummary, CategorySummaryAdapter.ViewHolder>(DiffCallback) {
+class CategorySummaryAdapter(private val context: Context) : ListAdapter<CategorySummary, CategorySummaryAdapter.ViewHolder>(DiffCallback) {
 
-    private val currencyFormat = NumberFormat.getCurrencyInstance(Locale.US)
+    private val preferencesHelper = PreferencesHelper(context)
+    private var currencyFormat = CurrencyHelper.getCurrencyFormatter(preferencesHelper.currency)
+
+    fun updateCurrencyFormat() {
+        currencyFormat = CurrencyHelper.getCurrencyFormatter(preferencesHelper.currency)
+        notifyDataSetChanged()
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val view = LayoutInflater.from(parent.context)

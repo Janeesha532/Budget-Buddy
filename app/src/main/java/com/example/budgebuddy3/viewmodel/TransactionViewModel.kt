@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.budgebuddy3.model.Transaction
 import com.example.budgebuddy3.model.TransactionType
 import com.example.budgebuddy3.repository.TransactionRepository
+import com.example.budgebuddy3.util.CurrencyHelper
 import com.example.budgebuddy3.util.NotificationHelper
 import com.example.budgebuddy3.util.PreferencesHelper
 import kotlinx.coroutines.launch
@@ -119,7 +120,7 @@ class TransactionViewModel(
                     progress >= 100 -> {
                         notificationHelper.sendBudgetPushNotification(
                             "Budget Exceeded!",
-                            "You have exceeded your monthly budget by ${currencyFormat.format(monthlyExpenses - budget)}"
+                            "You have exceeded your monthly budget by ${getCurrencyFormat().format(monthlyExpenses - budget)}"
                         )
                     }
                     progress >= threshold -> {
@@ -133,7 +134,11 @@ class TransactionViewModel(
         }
     }
 
+    private fun getCurrencyFormat(): java.text.NumberFormat {
+        return CurrencyHelper.getCurrencyFormatter(preferencesHelper.currency)
+    }
+
     companion object {
-        private val currencyFormat = java.text.NumberFormat.getCurrencyInstance(java.util.Locale.US)
+        // Remove static currencyFormat, we'll use dynamic one
     }
 } 

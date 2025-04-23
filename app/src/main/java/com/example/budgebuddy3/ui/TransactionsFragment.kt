@@ -11,7 +11,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.MenuProvider
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.budgebuddy3.BudgetApplication
@@ -21,6 +23,7 @@ import com.example.budgebuddy3.databinding.FragmentTransactionsBinding
 import com.example.budgebuddy3.model.Transaction
 import com.example.budgebuddy3.model.TransactionType
 import com.example.budgebuddy3.util.DataExportImportUtil
+import com.example.budgebuddy3.util.CurrencyHelper
 import com.example.budgebuddy3.util.PreferencesHelper
 import com.example.budgebuddy3.viewmodel.TransactionViewModel
 import com.example.budgebuddy3.viewmodel.TransactionViewModelFactory
@@ -37,7 +40,8 @@ class TransactionsFragment : Fragment(), TransactionAdapter.TransactionClickList
     private lateinit var viewModel: TransactionViewModel
     private lateinit var adapter: TransactionAdapter
     private lateinit var dataExportImportUtil: DataExportImportUtil
-    private val currencyFormat = NumberFormat.getCurrencyInstance(Locale.US)
+    private lateinit var preferencesHelper: PreferencesHelper
+    private var currencyFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale.US)
 
     private val exportLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
@@ -76,11 +80,6 @@ class TransactionsFragment : Fragment(), TransactionAdapter.TransactionClickList
         }
     }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setHasOptionsMenu(true)
-    }
-
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -98,25 +97,43 @@ class TransactionsFragment : Fragment(), TransactionAdapter.TransactionClickList
         setupRecyclerView()
         setupFab()
         observeViewModel()
+        setupMenu()
+
+        preferencesHelper = PreferencesHelper(requireContext())
+        currencyFormat = CurrencyHelper.getCurrencyFormatter(preferencesHelper.currency)
     }
 
-    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
-        inflater.inflate(R.menu.transactions_menu, menu)
-        super.onCreateOptionsMenu(menu, inflater)
+    private fun setupMenu() {
+        // Add menu items without using the Fragment Menu APIs
+        // Note how we can tie the MenuProvider to the viewLifecycleOwner
+        // and an optional Lifecycle.State (here, RESUMED) to indicate when
+        // the menu should be visible
+        requireActivity().addMenuProvider(object : MenuProvider {
+            override fun onCreateMenu(menu: Menu, menuInflater: MenuInflater) {
+                menuInflater.inflate(R.menu.transactions_menu, menu)
+            }
+
+            override fun onMenuItemSelected(menuItem: MenuItem): Boolean {
+                return when (menuItem.itemId) {
+                    R.id.action_export -> {
+                        startExport()
+                        true
+                    }
+                    R.id.action_import -> {
+                        startImport()
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }, viewLifecycleOwner, Lifecycle.State.RESUMED)
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            R.id.action_export -> {
-                startExport()
-                true
-            }
-            R.id.action_import -> {
-                startImport()
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
+    override fun onResume() {
+        super.onResume()
+        currencyFormat = CurrencyHelper.getCurrencyFormatter(preferencesHelper.currency)
+        adapter.updateCurrencyFormat()
+        updateUI()
     }
 
     private fun startExport() {
@@ -138,13 +155,13 @@ class TransactionsFragment : Fragment(), TransactionAdapter.TransactionClickList
 
     private fun setupViewModel() {
         val application = requireActivity().application as BudgetApplication
-        val preferencesHelper = PreferencesHelper(requireContext())
+        preferencesHelper = PreferencesHelper(requireContext())
         val factory = TransactionViewModelFactory(application.repository, preferencesHelper, application)
         viewModel = ViewModelProvider(requireActivity(), factory)[TransactionViewModel::class.java]
     }
 
     private fun setupRecyclerView() {
-        adapter = TransactionAdapter(this)
+        adapter = TransactionAdapter(requireContext(), this)
         binding.transactionsRecyclerView.apply {
             layoutManager = LinearLayoutManager(context)
             adapter = this@TransactionsFragment.adapter
@@ -160,6 +177,13 @@ class TransactionsFragment : Fragment(), TransactionAdapter.TransactionClickList
     private fun observeViewModel() {
         viewModel.transactions.observe(viewLifecycleOwner) { transactions ->
             adapter.submitList(transactions)
+            updateSummary(transactions)
+        }
+    }
+
+    private fun updateUI() {
+        // Call updateSummary with the current transactions
+        viewModel.transactions.value?.let { transactions ->
             updateSummary(transactions)
         }
     }
@@ -188,64 +212,78 @@ class TransactionsFragment : Fragment(), TransactionAdapter.TransactionClickList
     }
 
     private fun showTransactionDialog(existingTransaction: Transaction? = null) {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_add_transaction, null)
-        
-        val amountEditText = dialogView.findViewById<TextInputEditText>(R.id.amountEditText)
-        val descriptionEditText = dialogView.findViewById<TextInputEditText>(R.id.descriptionEditText)
-        val categoryEditText = dialogView.findViewById<TextInputEditText>(R.id.categoryEditText)
-        val typeToggleGroup = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.typeToggleGroup)
+        try {
+            val dialogView = layoutInflater.inflate(R.layout.dialog_add_transaction, null)
+            
+            val amountEditText = dialogView.findViewById<TextInputEditText>(R.id.amountEditText)
+            val descriptionEditText = dialogView.findViewById<TextInputEditText>(R.id.descriptionEditText)
+            val categoryEditText = dialogView.findViewById<TextInputEditText>(R.id.categoryEditText)
+            val typeToggleGroup = dialogView.findViewById<MaterialButtonToggleGroup>(R.id.typeToggleGroup)
 
-        // Pre-fill fields if editing
-        existingTransaction?.let { transaction ->
-            // Remove currency symbol and formatting for clean number
-            val amountStr = transaction.amount.toString()
-            amountEditText.setText(amountStr)
-            descriptionEditText.setText(transaction.description)
-            categoryEditText.setText(transaction.category)
-            typeToggleGroup.check(
-                when (transaction.type) {
-                    TransactionType.INCOME -> R.id.incomeButton
-                    TransactionType.EXPENSE -> R.id.expenseButton
-                }
-            )
-        } ?: typeToggleGroup.check(R.id.expenseButton) // Default to expense for new transactions
-
-        MaterialAlertDialogBuilder(requireContext())
-            .setTitle(if (existingTransaction == null) R.string.add_transaction else R.string.edit_transaction)
-            .setView(dialogView)
-            .setPositiveButton(R.string.save) { dialog, _ ->
-                val amount = amountEditText.text.toString().toDoubleOrNull() ?: 0.0
-                val description = descriptionEditText.text.toString()
-                val category = categoryEditText.text.toString()
-                val type = when (typeToggleGroup.checkedButtonId) {
-                    R.id.incomeButton -> TransactionType.INCOME
-                    else -> TransactionType.EXPENSE
-                }
-
-                if (existingTransaction != null) {
-                    val updatedTransaction = existingTransaction.copy(
-                        amount = amount,
-                        description = description,
-                        category = category,
-                        type = type
-                    )
-                    viewModel.update(updatedTransaction)
-                } else {
-                    val newTransaction = Transaction(
-                        amount = amount,
-                        description = description,
-                        category = category,
-                        type = type,
-                        date = Date()
-                    )
-                    viewModel.insert(newTransaction)
-                }
-                dialog.dismiss()
+            if (amountEditText == null || descriptionEditText == null || 
+                categoryEditText == null || typeToggleGroup == null) {
+                Toast.makeText(requireContext(), "Error loading dialog layout", Toast.LENGTH_SHORT).show()
+                return
             }
-            .setNegativeButton(R.string.cancel) { dialog, _ ->
-                dialog.dismiss()
-            }
-            .show()
+
+            // Pre-fill fields if editing
+            existingTransaction?.let { transaction ->
+                // Remove currency symbol and formatting for clean number
+                val amountStr = transaction.amount.toString()
+                amountEditText.setText(amountStr)
+                descriptionEditText.setText(transaction.description)
+                categoryEditText.setText(transaction.category)
+                typeToggleGroup.check(
+                    when (transaction.type) {
+                        TransactionType.INCOME -> R.id.incomeButton
+                        TransactionType.EXPENSE -> R.id.expenseButton
+                    }
+                )
+            } ?: typeToggleGroup.check(R.id.expenseButton) // Default to expense for new transactions
+
+            MaterialAlertDialogBuilder(requireContext())
+                .setTitle(if (existingTransaction == null) R.string.add_transaction else R.string.edit_transaction)
+                .setView(dialogView)
+                .setPositiveButton(R.string.save) { dialog, _ ->
+                    try {
+                        val amount = amountEditText.text.toString().toDoubleOrNull() ?: 0.0
+                        val description = descriptionEditText.text.toString()
+                        val category = categoryEditText.text.toString()
+                        val type = when (typeToggleGroup.checkedButtonId) {
+                            R.id.incomeButton -> TransactionType.INCOME
+                            else -> TransactionType.EXPENSE
+                        }
+
+                        if (existingTransaction != null) {
+                            val updatedTransaction = existingTransaction.copy(
+                                amount = amount,
+                                description = description,
+                                category = category,
+                                type = type
+                            )
+                            viewModel.update(updatedTransaction)
+                        } else {
+                            val newTransaction = Transaction(
+                                amount = amount,
+                                description = description,
+                                category = category,
+                                type = type,
+                                date = Date()
+                            )
+                            viewModel.insert(newTransaction)
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(requireContext(), "Error saving transaction: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                    dialog.dismiss()
+                }
+                .setNegativeButton(R.string.cancel) { dialog, _ ->
+                    dialog.dismiss()
+                }
+                .show()
+        } catch (e: Exception) {
+            Toast.makeText(requireContext(), "Error showing dialog: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onDestroyView() {

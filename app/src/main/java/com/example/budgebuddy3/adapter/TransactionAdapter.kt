@@ -1,5 +1,6 @@
 package com.example.budgebuddy3.adapter
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
@@ -8,11 +9,13 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.budgebuddy3.databinding.ItemTransactionBinding
 import com.example.budgebuddy3.model.Transaction
 import com.example.budgebuddy3.model.TransactionType
-import java.text.NumberFormat
+import com.example.budgebuddy3.util.CurrencyHelper
+import com.example.budgebuddy3.util.PreferencesHelper
 import java.text.SimpleDateFormat
 import java.util.Locale
 
 class TransactionAdapter(
+    private val context: Context,
     private val listener: TransactionClickListener
 ) : ListAdapter<Transaction, TransactionAdapter.TransactionViewHolder>(TransactionDiffCallback()) {
 
@@ -20,6 +23,14 @@ class TransactionAdapter(
         fun onTransactionClick(transaction: Transaction)
         fun onEditClick(transaction: Transaction)
         fun onDeleteClick(transaction: Transaction)
+    }
+
+    private val preferencesHelper = PreferencesHelper(context)
+    private var currencyFormat = CurrencyHelper.getCurrencyFormatter(preferencesHelper.currency)
+    
+    fun updateCurrencyFormat() {
+        currencyFormat = CurrencyHelper.getCurrencyFormatter(preferencesHelper.currency)
+        notifyDataSetChanged()
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TransactionViewHolder {
@@ -39,7 +50,6 @@ class TransactionAdapter(
         private val binding: ItemTransactionBinding
     ) : RecyclerView.ViewHolder(binding.root) {
         
-        private val currencyFormat = NumberFormat.getCurrencyInstance(Locale.US)
         private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
 
         init {

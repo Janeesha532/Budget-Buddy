@@ -10,6 +10,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.budgebuddy3.BudgetApplication
 import com.example.budgebuddy3.R
 import com.example.budgebuddy3.databinding.FragmentBudgetBinding
+import com.example.budgebuddy3.util.CurrencyHelper
 import com.example.budgebuddy3.util.PreferencesHelper
 import com.example.budgebuddy3.viewmodel.TransactionViewModel
 import com.example.budgebuddy3.viewmodel.TransactionViewModelFactory
@@ -21,7 +22,8 @@ class BudgetFragment : Fragment() {
     private var _binding: FragmentBudgetBinding? = null
     private val binding get() = _binding!!
     private lateinit var viewModel: TransactionViewModel
-    private val currencyFormat = NumberFormat.getCurrencyInstance(Locale.US)
+    private var currencyFormat: NumberFormat = NumberFormat.getCurrencyInstance(Locale.US)
+    private lateinit var preferencesHelper: PreferencesHelper
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -36,11 +38,18 @@ class BudgetFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         
         val repository = (requireActivity().application as BudgetApplication).repository
-        val preferencesHelper = PreferencesHelper(requireContext())
+        preferencesHelper = PreferencesHelper(requireContext())
+        currencyFormat = CurrencyHelper.getCurrencyFormatter(preferencesHelper.currency)
         val factory = TransactionViewModelFactory(repository, preferencesHelper, requireActivity().application)
         viewModel = ViewModelProvider(requireActivity(), factory)[TransactionViewModel::class.java]
 
         setupUI()
+        observeViewModel()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        currencyFormat = CurrencyHelper.getCurrencyFormatter(preferencesHelper.currency)
         observeViewModel()
     }
 

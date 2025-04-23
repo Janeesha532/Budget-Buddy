@@ -11,8 +11,8 @@
     <color name="text_dark">#2e2e2e</color>
     
     <!-- Background Colors -->
-    <color name="background_start">#f4f9f4</color>
-    <color name="background_end">#ffffff</color>
+    <color name="background_start">#e8f5e9</color>
+    <color name="background_end">#f9fbe7</color>
 
     <!-- Standard Colors -->
     <color name="purple_200">#FFBB86FC</color>

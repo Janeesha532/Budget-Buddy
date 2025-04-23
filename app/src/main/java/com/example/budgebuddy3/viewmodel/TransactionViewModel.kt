@@ -1,5 +1,6 @@
 package com.example.budgebuddy3.viewmodel
 
+import android.app.Application
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -7,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.budgebuddy3.model.Transaction
 import com.example.budgebuddy3.model.TransactionType
 import com.example.budgebuddy3.repository.TransactionRepository
+import com.example.budgebuddy3.util.NotificationHelper
 import com.example.budgebuddy3.util.PreferencesHelper
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -14,7 +16,8 @@ import java.util.Date
 
 class TransactionViewModel(
     private val repository: TransactionRepository,
-    private val preferencesHelper: PreferencesHelper
+    private val preferencesHelper: PreferencesHelper,
+    private val application: Application
 ) : ViewModel() {
     val transactions: LiveData<List<Transaction>> = repository.allTransactions
     
@@ -33,6 +36,8 @@ class TransactionViewModel(
     private val _monthlyIncome = MutableLiveData<Double>(0.0)
     val monthlyIncome: LiveData<Double> = _monthlyIncome
 
+    private val notificationHelper = NotificationHelper(application)
+
     init {
         // Initialize values when ViewModel is created
         viewModelScope.launch {
@@ -41,7 +46,7 @@ class TransactionViewModel(
         }
 
         // Observe transactions for changes
-        transactions.observeForever { transactions ->
+        transactions.observeForever { _ ->
             viewModelScope.launch {
                 updateTotals()
                 updateMonthlyCalculations()
@@ -94,13 +99,41 @@ class TransactionViewModel(
                 transactionCalendar.get(Calendar.YEAR) == currentYear
             }
 
-            _monthlyExpenses.value = currentMonthTransactions
+            val monthlyExpenses = currentMonthTransactions
                 .filter { it.type == TransactionType.EXPENSE }
                 .sumOf { it.amount }
+
+            _monthlyExpenses.value = monthlyExpenses
 
             _monthlyIncome.value = currentMonthTransactions
                 .filter { it.type == TransactionType.INCOME }
                 .sumOf { it.amount }
+
+            // Check budget limits and show notifications
+            val budget = _monthlyBudget.value ?: 0.0
+            if (budget > 0) {
+                val progress = (monthlyExpenses / budget * 100).toInt()
+                val threshold = preferencesHelper.budgetAlertThreshold
+
+                when {
+                    progress >= 100 -> {
+                        notificationHelper.sendBudgetPushNotification(
+                            "Budget Exceeded!",
+                            "You have exceeded your monthly budget by ${currencyFormat.format(monthlyExpenses - budget)}"
+                        )
+                    }
+                    progress >= threshold -> {
+                        notificationHelper.sendBudgetPushNotification(
+                            "Budget Warning",
+                            "You have reached ${progress}% of your monthly budget"
+                        )
+                    }
+                }
+            }
         }
+    }
+
+    companion object {
+        private val currencyFormat = java.text.NumberFormat.getCurrencyInstance(java.util.Locale.US)
     }
 } 

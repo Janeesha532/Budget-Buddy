@@ -37,7 +37,7 @@ class BudgetFragment : Fragment() {
         
         val repository = (requireActivity().application as BudgetApplication).repository
         val preferencesHelper = PreferencesHelper(requireContext())
-        val factory = TransactionViewModelFactory(repository, preferencesHelper)
+        val factory = TransactionViewModelFactory(repository, preferencesHelper, requireActivity().application)
         viewModel = ViewModelProvider(requireActivity(), factory)[TransactionViewModel::class.java]
 
         setupUI()

@@ -1,9 +1,16 @@
 package com.example.budgebuddy3.ui
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.Menu
+import android.view.MenuInflater
+import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -13,6 +20,7 @@ import com.example.budgebuddy3.adapter.TransactionAdapter
 import com.example.budgebuddy3.databinding.FragmentTransactionsBinding
 import com.example.budgebuddy3.model.Transaction
 import com.example.budgebuddy3.model.TransactionType
+import com.example.budgebuddy3.util.DataExportImportUtil
 import com.example.budgebuddy3.util.PreferencesHelper
 import com.example.budgebuddy3.viewmodel.TransactionViewModel
 import com.example.budgebuddy3.viewmodel.TransactionViewModelFactory
@@ -28,7 +36,50 @@ class TransactionsFragment : Fragment(), TransactionAdapter.TransactionClickList
     private val binding get() = _binding!!
     private lateinit var viewModel: TransactionViewModel
     private lateinit var adapter: TransactionAdapter
+    private lateinit var dataExportImportUtil: DataExportImportUtil
     private val currencyFormat = NumberFormat.getCurrencyInstance(Locale.US)
+
+    private val exportLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { uri ->
+                val success = dataExportImportUtil.exportTransactions(viewModel.transactions.value ?: emptyList(), uri)
+                Toast.makeText(
+                    requireContext(),
+                    if (success) "Transactions exported successfully" else "Failed to export transactions",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private val importLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { uri ->
+                val importedTransactions = dataExportImportUtil.importTransactions(uri)
+                if (importedTransactions != null) {
+                    // Show confirmation dialog with the number of transactions
+                    MaterialAlertDialogBuilder(requireContext())
+                        .setTitle("Import Transactions")
+                        .setMessage("Do you want to import ${importedTransactions.size} transactions?")
+                        .setPositiveButton("Import") { _, _ ->
+                            importedTransactions.forEach { transaction ->
+                                viewModel.insert(transaction)
+                            }
+                            Toast.makeText(requireContext(), "Transactions imported successfully", Toast.LENGTH_SHORT).show()
+                        }
+                        .setNegativeButton("Cancel", null)
+                        .show()
+                } else {
+                    Toast.makeText(requireContext(), "Failed to import transactions", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setHasOptionsMenu(true)
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -42,16 +93,53 @@ class TransactionsFragment : Fragment(), TransactionAdapter.TransactionClickList
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        dataExportImportUtil = DataExportImportUtil(requireContext())
         setupViewModel()
         setupRecyclerView()
         setupFab()
         observeViewModel()
     }
 
+    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+        inflater.inflate(R.menu.transactions_menu, menu)
+        super.onCreateOptionsMenu(menu, inflater)
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_export -> {
+                startExport()
+                true
+            }
+            R.id.action_import -> {
+                startImport()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    private fun startExport() {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            putExtra(Intent.EXTRA_TITLE, "budget_buddy_transactions.json")
+        }
+        exportLauncher.launch(intent)
+    }
+
+    private fun startImport() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+        }
+        importLauncher.launch(intent)
+    }
+
     private fun setupViewModel() {
         val application = requireActivity().application as BudgetApplication
         val preferencesHelper = PreferencesHelper(requireContext())
-        val factory = TransactionViewModelFactory(application.repository, preferencesHelper)
+        val factory = TransactionViewModelFactory(application.repository, preferencesHelper, application)
         viewModel = ViewModelProvider(requireActivity(), factory)[TransactionViewModel::class.java]
     }
 

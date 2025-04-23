@@ -47,7 +47,8 @@ class AnalysisFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
 
         setupViewModel()
-        setupPieChart()
+        setupExpensePieChart()
+        setupIncomePieChart()
         setupRecyclerView()
         observeTransactions()
     }
@@ -55,11 +56,11 @@ class AnalysisFragment : Fragment() {
     private fun setupViewModel() {
         val repository = (requireActivity().application as BudgetApplication).repository
         val preferencesHelper = PreferencesHelper(requireContext())
-        val factory = TransactionViewModelFactory(repository, preferencesHelper)
+        val factory = TransactionViewModelFactory(repository, preferencesHelper, requireActivity().application)
         viewModel = ViewModelProvider(requireActivity(), factory)[TransactionViewModel::class.java]
     }
 
-    private fun setupPieChart() {
+    private fun setupExpensePieChart() {
         binding.pieChart.apply {
             description.isEnabled = false
             setUsePercentValues(true)
@@ -83,6 +84,30 @@ class AnalysisFragment : Fragment() {
         }
     }
 
+    private fun setupIncomePieChart() {
+        binding.incomePieChart.apply {
+            description.isEnabled = false
+            setUsePercentValues(true)
+            setExtraOffsets(5f, 10f, 5f, 5f)
+            dragDecelerationFrictionCoef = 0.95f
+            isDrawHoleEnabled = true
+            setHoleColor(Color.WHITE)
+            setTransparentCircleColor(Color.WHITE)
+            setTransparentCircleAlpha(110)
+            holeRadius = 58f
+            transparentCircleRadius = 61f
+            setDrawCenterText(true)
+            rotationAngle = 0f
+            isRotationEnabled = true
+            isHighlightPerTapEnabled = true
+            animateY(1400, Easing.EaseInOutQuad)
+            legend.isEnabled = true
+            setEntryLabelColor(Color.BLACK)
+            setEntryLabelTextSize(12f)
+            centerText = "Income by Category"
+        }
+    }
+
     private fun setupRecyclerView() {
         categorySummaryAdapter = CategorySummaryAdapter()
         binding.categoryRecyclerView.apply {
@@ -99,6 +124,7 @@ class AnalysisFragment : Fragment() {
     }
 
     private fun updateChartData(transactions: List<Transaction>) {
+        // Update Expenses Chart
         val expensesByCategory = transactions
             .filter { it.type == TransactionType.EXPENSE }
             .groupBy { it.category }
@@ -106,11 +132,11 @@ class AnalysisFragment : Fragment() {
 
         val totalExpenses = expensesByCategory.values.sum()
 
-        val entries = expensesByCategory.map { (category, amount) ->
+        val expenseEntries = expensesByCategory.map { (category, amount) ->
             PieEntry(amount.toFloat(), category)
         }
 
-        val dataSet = PieDataSet(entries, "Categories").apply {
+        val expenseDataSet = PieDataSet(expenseEntries, "Expense Categories").apply {
             colors = ColorTemplate.MATERIAL_COLORS.toList()
             valueFormatter = PercentFormatter(binding.pieChart)
             valueTextSize = 12f
@@ -121,10 +147,36 @@ class AnalysisFragment : Fragment() {
             yValuePosition = PieDataSet.ValuePosition.OUTSIDE_SLICE
         }
 
-        binding.pieChart.data = PieData(dataSet)
+        binding.pieChart.data = PieData(expenseDataSet)
         binding.pieChart.invalidate()
 
-        // Update category summaries
+        // Update Income Chart
+        val incomeByCategory = transactions
+            .filter { it.type == TransactionType.INCOME }
+            .groupBy { it.category }
+            .mapValues { (_, transactions) -> transactions.sumOf { it.amount } }
+
+        val totalIncome = incomeByCategory.values.sum()
+
+        val incomeEntries = incomeByCategory.map { (category, amount) ->
+            PieEntry(amount.toFloat(), category)
+        }
+
+        val incomeDataSet = PieDataSet(incomeEntries, "Income Categories").apply {
+            colors = ColorTemplate.PASTEL_COLORS.toList()
+            valueFormatter = PercentFormatter(binding.incomePieChart)
+            valueTextSize = 12f
+            valueTextColor = Color.BLACK
+            valueLinePart1Length = 0.4f
+            valueLinePart2Length = 0.4f
+            valueLineColor = Color.BLACK
+            yValuePosition = PieDataSet.ValuePosition.OUTSIDE_SLICE
+        }
+
+        binding.incomePieChart.data = PieData(incomeDataSet)
+        binding.incomePieChart.invalidate()
+
+        // Update category summaries for expenses
         val categorySummaries = expensesByCategory.map { (category, amount) ->
             CategorySummary(
                 category = category,
